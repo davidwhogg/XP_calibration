@@ -6,12 +6,12 @@
 
 % typesetting issues
 \setstretch{1.08}
-\addtolength{\topmargin}{-0.50mm}
-\addtolength{\textheight}{1.60in}
-\setlength{\textwidth}{128mm}
+\addtolength{\topmargin}{-10mm}
+\addtolength{\textheight}{40mm}
+\setlength{\textwidth}{130mm}
 \setlength{\oddsidemargin}{0.5\paperwidth}\addtolength{\oddsidemargin}{-25.4mm}\addtolength{\oddsidemargin}{-0.5\textwidth}
 \pagestyle{myheadings}
-\markboth{foo}{\sffamily Hogg / What is a measurement?}
+\markboth{foo}{\sffamily Hogg / A tractable plan to recalibrate XP}
 \renewcommand{\newblock}{} % this adjusts the bibliography style.
 \frenchspacing\sloppy\sloppypar\raggedbottom
 
@@ -35,8 +35,8 @@
 We deliver Mission-averaged XP spectra, and also individual-epoch XP spectra, calibrated to a consistent spectral resolution and throughput.
 We learn the mean spectral coefficients for every star in a map operation over stars.
 We learn the shapes of the basis functions for every across-scan position in a map operation over position--time bins.
-These bins can overlap in across-scan position and in elapsed mission time.
-This approach is computationally tractable.
+These bins can overlap in across-scan position and in elapsed mission time to encourage smoothness of this non-parametric model.
+This approach is computationally tractable, because of the decomposition of the optimization into alternating maps.
 It relies on the fact that \textsl{Gaia} has many transits per star, and many transits per across-scan location on the detector.
 
 \paragraph{Setup}
@@ -47,8 +47,8 @@ We're going to assume that these are all correctly read, and background subtract
 
 Stars will be indexed by $m$, such that transit $n$ is of star $m_n$.
 In set terms, transit $n$ is an observation of star $m$ if $n\in\set{S}_m$, where $\set{S}_m$ is the set of all transits of star $m$.
-In addition, every transit is taken at an across-scan location $\mu_n$ and time $t_n$ and along-scan sub-pixel offset $\delta_n$.
-(HOGG ASKS: Should I use $\mu$ for this coordinate? What is $\delta$ called in the documentation?)
+In addition, every transit is taken at an across-scan location $\mu_n$ and time $t_n$ and along-scan sub-pixel offset $\Delta_n$.
+(HOGG ASKS: Should I use $\mu$ for the AC coordinate? What is $\Delta$ called in the documentation?)
 For computational tractability (and we remind you that we have a lot of data), we will split the across-scan positions and times into bins $\ell$---maybe overlapping bins---such that transit $n$ is an observation in position--time bin $\ell$ if $n\in\set{T}_\ell$, where $\set{T}_\ell$ is the set of all observations that fall into position--time bin $\ell$.
 There are so many transits that there could be as many across-scan bins as there are detector positions in the across-scan direction, or even more.
 We are recommending that these bins be set up to overlap, to encourage results to be somewhat smooth.
@@ -62,19 +62,31 @@ We will break degeneracies by choosing a fiducial bin $\ell_0$ in which we hard-
 Briefly, the plan is: We will optimize the coefficients $b_{mk}$ for star $m$ by performing a linear fit to all observations $n\in\set{S}_m$, and then we will optimize the basis functions $B_{k\ell}()$ by performing a linear fit to all observations $n\in\set{T}_\ell$.
 The model is
 \begin{align}
-    y_{ni} &= \sum_{k=1}^K b_{mk}\,B_{k\ell}(i-\delta_n)+\text{noise} ~;~ \text{when} ~ n\in\set{S}_m\cap\set{T}_\ell ~.
+    y_{ni} &= \sum_{k=1}^K b_{mk}\,B_{k\ell}(i-\Delta_n)+\text{noise} ~;~ \text{when} ~ n\in\set{S}_m\cap\set{T}_\ell ~.
 \end{align}
-Because we will make our position--time bins tiny, typically only one transit will be in this set intersection, though there may be exceptions.
+Because we will make our position--time bins $\ell$ tiny, typically only one transit will be in this set intersection, though there may be exceptions.
 This model can be optimized with iterated least squares, in which we fit for the $b_{mk}$ in an asynchronous map over stars, and then fit for the basis functions $B_{k\ell}()$ in an asynchronous map over position--time bins $\ell$.
-The only additional constraint is that at fiducial position--time bin $\ell=\ell_0$ (maybe the ``best location'' on the detector), the $B_{k\ell}()$ functions will be set to the \textsl{Gaia} Mission fiducial values.
+The only additional constraint is that at fiducial position--time bin $\ell=\ell_0$ (maybe the ``best location'' on the detector), the $B_{k\ell}()$ functions will be set to the \textsl{Gaia} Mission fiducial functions $B_{k0}()$.
 
 Now we need a basis in which to describe the $B_{k\ell}()$ functions.
-You aren't going to like my ideas here.
-(HOGG SAY: Write all this down.)
+You aren't going to like our ideas here.
+Our recommendation is to use the fiducial basis $B_{k0}()$ as the basis for the $B_{k\ell}()$.
+That is
+\begin{align}
+    B_{k\ell}() = \sum_{k'=1}^{K} a_{\ell kk'}\,B_{k'0}() ~,
+\end{align}
+where the $a_{\ell kk'}$ are coefficients that mix the fiducial functions $B_{k0}()$ into the functions $B_{k\ell}()$ relevant to each position--time bin $\ell$.
+In the fiducial bin $\ell_0$, the coefficients are $a_{\ell_0 kk'} = \delta_{kk'}$, where $\delta_{kk'}$ is the Kronecker delta (or identity).
 
-HOGG SAY: Noise model and explicit objective function.
+We are going to assume not just that the $y_{ni}$ are correctly extracted and background-subtracted and so on, but also that they have known noise properties.
+Even more specifically, we are going to assume that we have uncertainty variance estimates $\sigma^2_{ni}$ that accurately represent the variances of additive, zero-mean, Gaussian noise.
+In this case, the objective function for the entire survey is given by
+\begin{align}
+    \chi_{ni} &= \frac{1}{\sigma_{ni}}\,\left[y_{ni} - \sum_{k=1}^K b_{m_nk}\,B_{k\ell_n}(i-\Delta_n)\right] \\
+    \chi^2 &= \sum_n\sum_i \chi_{ni}^2 ~.
+\end{align}
 
-This procedure will deliver mean spectral coefficients $b_{mk}$ for every star $m$.
+The optimization procedure below will deliver mean spectral coefficients $b_{mk}$ for every star $m$.
 But of course stars vary; that's almost the whole point of this project.
 Can we output useful spectral information at every transit epoch for every star, on a consistent resolution and throughput grid?
 Yes, of course!
@@ -83,7 +95,87 @@ For every transit $n$, it is possible to do a least-square fit for the $K$ coeff
 
 HOGG SAY: I need to say that I can't deal with the different gates, or at least not trivially.
 
-\paragraph{Acknowledgements}
-Thank you to the XP team at Cambridge for helping me formulate this.
+\paragraph{Initialization, optimization, and implementation}
+Briefly, we are going to initialize the $a_{\ell kk'}$ trivially, and then perform iterated least squares to update the stellar mean spectral coefficients $b_{mk}$ by what we will call the ``b-step'' and the basis-function coefficients $a_{\ell kk'}$ by what we will call the ``a-step''.
+The initialization will be $a_{\ell kk'}=\delta_{kk'}$ for all $\ell$.
+Then the b-step and a-step are iterated to convergence.
+
+The \emph{b-step} updates the coefficients $b_{mk}$ for each star $m$.
+Each star $m$ has been observed $N_m=|\set{S}_m|$ times.
+If there are $D$ pixels in each transit observation (such that $1\leq i\leq D$), then there are $N_m\,D$ measurements relevant to the inference for this star.
+We construct a $N_m\,D\times K$ design matrix $X_m$, a $N_m\,D$ column data vector $Y_m$, and a diagonal variance tensor $C_m$ with elements 
+\begin{align}
+    [X_m]_{jk} &= B_{k\ell_n}(i-\Delta_n) \\
+    [Y_m]_j &= y_{ni} \\
+    [C_m]_{jj} &= \sigma^2_{ni} ~,
+\end{align}
+where the index $j$ indexes all $(n,i)$ pairs corresponding to all pixels of all transits for star $m$.
+Now we fit to update the $b_{mk}$ with the usual mathematics:
+\begin{align}
+    Q_m &= [X_m^\top\,C^{-1}_m\,X_m]^{-1}\,X_m^\top\,C^{-1}_m\,Y_m \\
+    b_{mk} &\leftarrow [Q_m]_{k}
+\end{align}
+The b-step uses the current best guess of the basis functions $B_{k\ell}()$, which we update in the a-step (below).
+
+The \emph{a-step} updates the functions $B_{k\ell}()$ by updating the mixing coefficients $a_{\ell kk'}$.
+Each position--time bin $\ell$ contains $N_\ell=|\set{T}_\ell|$ transit observations.
+There are $N_\ell\,D$ measurements relevant to the inference for this bin.
+We construct a $N_\ell\,D\times K^2$ design matrix $X_\ell$, a $N_\ell\,D$ column data vector $Y_\ell$, and a diagonal variance tensor $C_\ell$ with elements 
+\begin{align}
+    [X_\ell]_{js} &= b_{m_nk}\,B_{k'0}(i-\Delta_n) \\
+    [Y_\ell]_j &= y_{ni} \\
+    [C_\ell]_{jj} &= \sigma^2_{ni} ~,
+\end{align}
+where the index $j$ indexes all $(n,i)$ pairs corresponding to all pixels of all transits in position--time bin $\ell$,
+and the index $s$ indexes all $K^2$ $(k,k')$ pairs.
+Now we fit to update the $a_{\ell kk'}$ with the same usual mathematics:
+\begin{align}
+    Q_\ell &= [X_\ell^\top\,C^{-1}_\ell\,X_\ell]^{-1}\,X_\ell^\top\,C^{-1}_\ell\,Y_\ell \\
+    a_{\ell kk'} &\leftarrow [Q_\ell]_{s}
+\end{align}
+The a-step uses the current best guess of all of the coefficients $b_{mk}()$, which we update in the b-step (above).
+
+Extremely importantly, \emph{we don't perform the a-step at all for the fiducial position--time bin $\ell_0$};
+we keep $a_{\ell_0 kk'}=\delta_{kk'}$ always.
+This fixes the $B_{k\ell_0}()$ functions to their fiducial shapes at the fiducial position and time.
+We very much hope that this rigidity in the fiducial bin is sufficient to break all degeneracies in the model.
+We aren't absolutely certain that this constraint will be strong enough.
+
+Some implementation notes:
+The b-step is performed asynchronously in a map operation over stars.
+The a-step is performed asynchronously in a map operation over position--time bins.
+The matrices $C_m$ and $C_\ell$ are never explicitly built, since the right multiplication by their inverses is a trivial column-wise multiply.
+The inverse operation \texttt{inv()} is never used; instead we always perform $M^{-1}\,b$ by an operation like \texttt{solve(M, b)} or \texttt{lstsq(M, b)}.
+
+Once everything is converged, and all the mean spectral coefficients $b_{mk}$ are set,
+and all of the basis-function mixing coefficents $a_{\ell kk'}$ are set,
+we can obtain best-fit individual-transit coefficients $b_{nk}$ for every single individual transit $n$ by
+\begin{align}
+    [X_n]_{ik} &= B_{k\ell}(i-\Delta_n) \\
+    [Y_n]_i &= y_{ni} \\
+    [C_n]_{ii} &= \sigma^2_{ni} \\
+    Q_n &= [X_n^\top\,C^{-1}_n\,X_n]^{-1}\,X_n^\top\,C^{-1}_n\,Y_n \\
+    b_{nk} &\leftarrow [Q_n]_{k} ~.
+\end{align}
+This can also be done asynchronously, this time over every single transit $n$.
+To be extremely clear: The coefficients $b_{mk}$ are the mean (over all transits) spectral coefficients for each star $m$,
+while the coefficients $b_{nk}$ are the individual-transit spectral coefficients for each individual transit $n$.
+Roughly speaking (but not precisely, because of heteroskedasticity):
+\begin{align}
+    b_{mk} \approx \frac{1}{|\set{S}_m|}\sum_{n\in\set{S}_m} b_{nk} ~.
+\end{align}
+This won't be exactly true, but it will be close, and it will be comforting to our users.
+
+\paragraph{Demonstration and results}
+
+\paragraph{Discussion and issues}
+HOGG SAY: Binning is sinning, so what should we do differently? And what would that cost us?
+
+HOGG SAY: We gave up on the multiple gates. How could we handle them?
+
+HOGG SAY: We don't address overall (or absolute) calibration, nor do we address the accuracy of the fiducial basis functions.
+
+\paragraph{Acknowledgments}
+Thank you to the CU5 XP team at Cambridge University for helping me formulate this.
 
 \end{document}
