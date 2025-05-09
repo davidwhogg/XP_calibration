@@ -1,0 +1,89 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[a4paper]{geometry}
+\usepackage{setspace}
+\usepackage{amsmath, amsfonts, mathrsfs}
+
+% typesetting issues
+\setstretch{1.08}
+\addtolength{\topmargin}{-0.50mm}
+\addtolength{\textheight}{1.60in}
+\setlength{\textwidth}{128mm}
+\setlength{\oddsidemargin}{0.5\paperwidth}\addtolength{\oddsidemargin}{-25.4mm}\addtolength{\oddsidemargin}{-0.5\textwidth}
+\pagestyle{myheadings}
+\markboth{foo}{\sffamily Hogg / What is a measurement?}
+\renewcommand{\newblock}{} % this adjusts the bibliography style.
+\frenchspacing\sloppy\sloppypar\raggedbottom
+
+% text macros
+\renewcommand{\paragraph}[1]{\bigskip\par\noindent\textbf{#1}~---}
+\newcommand{\documentname}{\textsl{Note}}
+\newcommand{\sectionname}{Section}
+\newcommand{\secref}[1]{\sectionname~\ref{#1}}
+\newcommand{\foreign}[1]{\textsl{#1}}
+
+% math macros
+\newcommand{\set}[1]{\mathscr{#1}}
+
+\title{\bfseries A computationally tractable plan to recalibrate the XP visit spectra}
+\author{Hogg}
+\date{May 2025}
+\begin{document}
+\maketitle
+
+\paragraph{Abstract}
+We deliver Mission-averaged XP spectra, and also individual-epoch XP spectra, calibrated to a consistent spectral resolution and throughput.
+We learn the mean spectral coefficients for every star in a map operation over stars.
+We learn the shapes of the basis functions for every across-scan position in a map operation over position--time bins.
+These bins can overlap in across-scan position and in elapsed mission time.
+This approach is computationally tractable.
+It relies on the fact that \textsl{Gaia} has many transits per star, and many transits per across-scan location on the detector.
+
+\paragraph{Setup}
+We're going to imagine that there are has transits indexed by $n$ (in which an XP spectrum was read for one star).
+we will refer to these individual observations as ``transits'' in what follows.
+Each of these transits has pixels $i$, such that the fundamental data are pixel values $f_{ni}$.
+We're going to assume that these are all correctly read, and background subtracted and so on, such that they are linearly related to the emission from the star.
+
+Stars will be indexed by $m$, such that transit $n$ is of star $m_n$.
+In set terms, transit $n$ is an observation of star $m$ if $n\in\set{S}_m$, where $\set{S}_m$ is the set of all transits of star $m$.
+In addition, every transit is taken at an across-scan location $\mu_n$ and time $t_n$ and along-scan sub-pixel offset $\delta_n$.
+(HOGG ASKS: Should I use $\mu$ for this coordinate? What is $\delta$ called in the documentation?)
+For computational tractability (and we remind you that we have a lot of data), we will split the across-scan positions and times into bins $\ell$---maybe overlapping bins---such that transit $n$ is an observation in position--time bin $\ell$ if $n\in\set{T}_\ell$, where $\set{T}_\ell$ is the set of all observations that fall into position--time bin $\ell$.
+There are so many transits that there could be as many across-scan bins as there are detector positions in the across-scan direction, or even more.
+We are recommending that these bins be set up to overlap, to encourage results to be somewhat smooth.
+More about that when we run a test.
+
+Now we will depart from the CU5 approach in a simple way.
+My model is that the basis functions $B_k()$ are going to depend on position--time bin $\ell$.
+That is, we will not learn the convolution kernels $a_{ij}$ but instead we will learn the convolved basis functions.
+We will break degeneracies by choosing a fiducial bin $\ell_0$ in which we hard-set the basis functions $B_k()$, and we will get smoothness by having surfeit of data.
+
+Briefly, the plan is: We will optimize the coefficients $b_{mk}$ for star $m$ by performing a linear fit to all observations $n\in\set{S}_m$, and then we will optimize the basis functions $B_{k\ell}()$ by performing a linear fit to all observations $n\in\set{T}_\ell$.
+The model is
+\begin{align}
+    y_{ni} &= \sum_{k=1}^K b_{mk}\,B_{k\ell}(i-\delta_n)+\text{noise} ~;~ \text{when} ~ n\in\set{S}_m\cap\set{T}_\ell ~.
+\end{align}
+Because we will make our position--time bins tiny, typically only one transit will be in this set intersection, though there may be exceptions.
+This model can be optimized with iterated least squares, in which we fit for the $b_{mk}$ in an asynchronous map over stars, and then fit for the basis functions $B_{k\ell}()$ in an asynchronous map over position--time bins $\ell$.
+The only additional constraint is that at fiducial position--time bin $\ell=\ell_0$ (maybe the ``best location'' on the detector), the $B_{k\ell}()$ functions will be set to the \textsl{Gaia} Mission fiducial values.
+
+Now we need a basis in which to describe the $B_{k\ell}()$ functions.
+You aren't going to like my ideas here.
+(HOGG SAY: Write all this down.)
+
+HOGG SAY: Noise model and explicit objective function.
+
+This procedure will deliver mean spectral coefficients $b_{mk}$ for every star $m$.
+But of course stars vary; that's almost the whole point of this project.
+Can we output useful spectral information at every transit epoch for every star, on a consistent resolution and throughput grid?
+Yes, of course!
+For every transit $n$, it is possible to do a least-square fit for the $K$ coefficients $b_{nk}$ relevant to that observation, using the best-fit values for the basis functions $B_{k\ell}()$ in the position--time bin $\ell$ corresponding to transit $n$.
+(HOGG ASKS: Need I say more?)
+
+HOGG SAY: I need to say that I can't deal with the different gates, or at least not trivially.
+
+\paragraph{Acknowledgements}
+Thank you to the XP team at Cambridge for helping me formulate this.
+
+\end{document}
